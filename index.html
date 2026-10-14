@@ -279,8 +279,8 @@ function buildEasel() {
   g.add(board);
   // three legs, spread at the bottom
   const top = new THREE.Vector3(0, 3.5, 0);
-  g.add(beam(top, new THREE.Vector3(-.9, 0, .5), .14, wood));
-  g.add(beam(top, new THREE.Vector3(.9, 0, .5), .14, wood));
+  g.add(beam(top, new THREE.Vector3(-.9, 0, -.6), .14, wood));
+  g.add(beam(top, new THREE.Vector3(.9, 0, -.6), .14, wood));
   g.add(beam(top, new THREE.Vector3(0, 0, -.9), .14, wood));
   // paint tray at the bottom of the canvas
   g.add(box(2.2, .1, .4, wood, 0, 1.2, .25));
