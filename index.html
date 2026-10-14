@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Direction 5 · 3D World with Objects</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=VT323&display=swap" rel="stylesheet" />
+<style>
+  :root { --ink:#fff; --bg:#0d1b2a; --accent:#ffd166; --hot:#ef476f; --mint:#06d6a0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink); font-family: 'VT323', monospace; font-size: 22px; }
+  canvas#scene { position: fixed; inset: 0; display: block; }
+  #hud {
+    position: fixed; top: 14px; left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: flex-start;
+    font-family: 'Silkscreen', monospace; font-size: 12px; pointer-events: none; text-shadow: 2px 2px 0 #000;
+  }
+  #hud .box { background: rgba(0,0,0,.45); padding: 8px 10px; border: 2px solid var(--ink); }
+  #prompt {
+    position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); display: none;
+    font-family: 'Silkscreen', monospace; font-size: 12px; background: var(--accent); color: #111; padding: 8px 12px;
+    border: 3px solid #000; box-shadow: 4px 4px 0 #000; pointer-events: none; white-space: nowrap;
+  }
+  #prompt.show { display: block; animation: pop .2s ease-out; }
+  @keyframes pop { from { transform: translateX(-50%) scale(.6); } to { transform: translateX(-50%) scale(1); } }
+  #panel {
+    position: fixed; right: 16px; top: 80px; width: min(380px, calc(100vw - 32px)); max-height: calc(100vh - 160px); overflow: auto;
+    background: #fff; color: #111; border: 4px solid #000; box-shadow: 8px 8px 0 #000; padding: 18px 18px 14px;
+    transform: translateX(120%); transition: transform .35s cubic-bezier(.2,.8,.2,1);
+  }
+  #panel.open { transform: translateX(0); }
+  #panel h2 { font-family: 'Silkscreen', monospace; font-size: 16px; margin: 0 0 8px; }
+  #panel p { font-size: 22px; line-height: 1.1; margin: 0 0 10px; white-space: pre-line; }
+  #panel .close { position: absolute; top: 8px; right: 10px; font-family: 'Silkscreen', monospace; background: none; border: 0; cursor: pointer; font-size: 14px; }
+  #panel .ascii { white-space: pre; font-size: 16px; line-height: 16px; margin: 0 0 10px; }
+  #game-over {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+    background: rgba(0,0,0,.6); text-align: center; font-family: 'Silkscreen', monospace;
+  }
+  #game-over.show { display: flex; }
+  .btn {
+    font-family: 'Silkscreen', monospace; font-size: 12px; background: var(--mint); color: #05201a; border: 3px solid #000;
+    padding: 12px 18px; cursor: pointer; box-shadow: 4px 4px 0 #000;
+  }
+  .btn:active { transform: translate(2px,2px); box-shadow: 2px 2px 0 #000; }
+  #toast {
+    position: fixed; left: 50%; top: 64px; transform: translateX(-50%); display: none; background: var(--accent); color: #111;
+    font-family: 'Silkscreen', monospace; font-size: 12px; padding: 8px 14px; border: 3px solid #000; box-shadow: 4px 4px 0 #000;
+    pointer-events: none; white-space: nowrap; z-index: 5;
+  }
+  #toast.show { display: block; animation: pop .2s ease-out; }
+  #dialog {
+    position: fixed; left: 50%; bottom: 56px; transform: translateX(-50%); width: min(720px, calc(100vw - 32px));
+    background: #05051a; border: 4px solid #fff; padding: 16px 20px; box-shadow: 6px 6px 0 var(--hot); display: none; z-index: 6;
+  }
+  #dialog.show { display: block; }
+  #dialog h2 { font-family: 'Silkscreen', monospace; font-size: 14px; margin: 0 0 10px; color: var(--accent); }
+  #dialog p { margin: 0; font-size: 24px; line-height: 1.2; white-space: pre-line; min-height: 4.5em; }
+  #hud .bump { animation: bump .45s ease-out; }
+  @keyframes bump { 0% { transform: scale(1); } 35% { transform: scale(1.35); } 100% { transform: scale(1); } }
+  #controls {
+    position: fixed; left: 16px; bottom: 14px; font-size: 18px; opacity: .85; pointer-events: none; text-shadow: 2px 2px 0 #000;
+  }
+  #intro {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+    background: linear-gradient(#0d1b2a, #1b3a5c); text-align: center; font-family: 'Silkscreen', monospace;
+    transition: opacity .6s;
+  }
+  #intro.gone { opacity: 0; pointer-events: none; }
+  #intro h1 { font-size: clamp(20px, 4vw, 40px); margin: 0; color: var(--accent); text-shadow: 4px 4px 0 var(--hot); }
+  #intro p { font-family: 'VT323', monospace; font-size: 24px; margin: 0; }
+</style>
+</head>
+<body>
+
+<canvas id="scene" aria-label="3D island to explore"></canvas>
+
+<div id="intro">
+  <h1>YOUR NAME'S ISLAND</h1>
+  <p>[Placeholder] Walk to an object to read a chapter. Collect tokens for a high score.</p>
+  <button class="btn" id="start-btn">EXPLORE</button>
+  <p style="font-size:18px; opacity:.8">WASD / arrows to walk · E to open · SPACE to jump</p>
+</div>
+
+<div id="hud">
+  <div class="box" id="hud-left">COINS 0/5</div>
+  <div class="box" id="hud-right">TOKENS 00 · TIME 60</div>
+</div>
+
+<div id="prompt">PRESS E · ENTER</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="dialog" role="dialog" aria-live="polite"><h2 id="dialog-title"></h2><p id="dialog-text"></p></div>
+<div id="controls">WASD / arrows · E open · SPACE jump · T start token run</div>
+
+<aside id="panel" role="dialog" aria-live="polite" aria-labelledby="panel-title">
+  <button class="close" id="panel-close" aria-label="Close">✕ CLOSE</button>
+  <pre class="ascii" id="panel-art"></pre>
+  <h2 id="panel-title"></h2>
+  <p id="panel-body"></p>
+</aside>
+
+<div id="game-over">
+  <div id="go-text"></div>
+  <button class="btn" id="again">PLAY AGAIN</button>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ---- placeholder content --------------------------------------------------
+// Chapters 0-3 are objects; chapter 4 is a city skyline.
+const CHAPTERS = [
+  { title: 'A town of twenty thousand', year: '', body: 'I grew up in a town of about 20,000 just north of Sundsvall, known for ice hockey and a wood industry where most people worked.\n\nAs a kid I visited Stockholm and felt like a tourist, exploring everything a big city offers, especially the things that were free.', art: ' ┌─┐┌─┐ ▄▄▄▄\n │ ││ │▐████▌\n ┴─┴┴─┴▀▀▀▀▀' },
+  { title: 'Painting', year: '', body: 'Painting is where I get to play without a brief. Colour, texture and composition, and the patience of letting something take shape on its own terms.', art: ' ┌──────┐\n │ ▲ ▲  │\n │  ▬▬  │\n └──────┘' },
+  { title: 'Project manager, scriptwriter, creative lead', year: '', body: 'I started as a project manager, writing scripts, leading production and working as a creative lead for computer games for kid. It was fun, but too broad.\n\nIt made me realize that my core passion is in the design of interfaces, so I focused there.', art: '  ▄▄▄▄▄\n ▐▀▀▀▀▌\n  ▐▌ ▐▌' },
+  { title: 'Deadlifts and kettlebells', year: '', body: 'I love the honesty of strength training — clear goals, steady progress, and the feeling of lifting more than you thought you could.', art: '▐█▌══════════▐█▌\n  ▐█▌ bar  ▐█▌' },
+  { title: 'The city, for art school', year: '', body: 'Later I moved to Stockholm to go to art school. The museums I had once visited as a tourist were now free for me as a student too.\n\nThe city I explored as a kid became home.', art: ' ▐█▌ ▐█▌\n▐█▌▐█▌▐█▌' },
+  { title: '“Designing information,” and a CD-ROM', year: '', body: 'In the nineties I was studying art when I read that a future in “designing information” sounded exciting. It mixed sound, design, visuals and interaction at the very start of the internet era.\n\nI ended up making interactive games on CD-ROM, and what hooked me was the richness of the medium: the animation, the interaction, the music and the sound effects.', art: ' ┌──────┐\n │ ☺  ☺ │\n └──────┘' },
+];
+
+// ---- renderer, scene, camera -------------------------------------------
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d1b2a);
+scene.fog = new THREE.Fog(0x0d1b2a, 40, 100);
+
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, .1, 200);
+camera.position.set(0, 12, 18);
+
+scene.add(new THREE.HemisphereLight(0xbfe3ff, 0x223344, 1.1));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.position.set(12, 20, 8);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30 });
+scene.add(sun);
+
+// ---- materials and helpers ----------------------------------------------
+const lam = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, ...extra });
+function box(w, h, d, material, x = 0, y = 0, z = 0) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+  m.position.set(x, y, z);
+  return m;
+}
+function cylinder(rTop, rBottom, h, material, seg = 24) {
+  return new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBottom, h, seg), material);
+}
+// a stick from point a to point b (used for easel legs)
+function beam(a, b, t, material) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(t, a.distanceTo(b), t), material);
+  m.position.copy(a).add(b).multiplyScalar(.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+  return m;
+}
+function canvasTexture(size, draw, repeat = 1) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  draw(c.getContext('2d'), size);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(repeat, repeat);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+// ---- island: voxel ground with a few stepped hills -----------------------
+const ISLAND_R = 22;
+const voxelGeo = new THREE.BoxGeometry(1, 1, 1);
+const grassMat = lam(0x3f9b5b);
+const dirtMat = lam(0x6b4a33);
+const waterMat = lam(0x1f6fb2);
+function heightSteps(x, z) {
+  const d = Math.hypot(x, z);
+  return d < ISLAND_R - 3 ? 1 + Math.round(Math.sin(x * .4) * .6 + Math.cos(z * .35) * .6 + .6) : 0;
+}
+for (let x = -ISLAND_R; x <= ISLAND_R; x++) {
+  for (let z = -ISLAND_R; z <= ISLAND_R; z++) {
+    const d = Math.hypot(x, z);
+    if (d > ISLAND_R) continue;
+    const h = heightSteps(x, z);
+    const top = d < ISLAND_R - 1 ? h : 0;
+    for (let y = -1; y <= top; y++) {
+      const m = new THREE.Mesh(voxelGeo, y === top ? grassMat : dirtMat);
+      m.position.set(x, y, z);
+      m.receiveShadow = true; m.castShadow = true;
+      scene.add(m);
+    }
+  }
+}
+const sea = new THREE.Mesh(new THREE.CircleGeometry(80, 48), waterMat);
+sea.rotation.x = -Math.PI / 2; sea.position.y = -1.5;
+scene.add(sea);
+
+function heightAt(x, z) {
+  const d = Math.hypot(x, z);
+  if (d > ISLAND_R - 1) return 0;
+  return heightSteps(x, z) + .5;
+}
+
+// ---- chapter objects -----------------------------------------------------
+// 0 wood pulp factory · 1 easel with a painting · 2 floppy disk · 3 barbell · 4 city skyline
+const positions = [[-12, -6], [4, 16], [10, -10], [11, 8], [0, -17], [-8, 9]];   // the floppy and the Macintosh have switched places
+let smokeTimer = 0;
+
+// Wood pulp factory: brick hall, sawtooth roof, two smoking chimneys, and a stack of logs
+const smokes = [];   // puffs rising from the chimneys
+function buildFactory() {
+  const g = new THREE.Group();
+  const brick = lam(0xa0522d);
+  const slate = lam(0x4a4f57);
+  const wood = lam(0xc9a66b);
+  g.add(box(3.4, 1.8, 2.4, brick, 0, .9, 0));                        // main hall
+  // sawtooth roof: three teeth, each with a glass face on the upright side
+  for (let k = 0; k < 3; k++) {
+    const s = new THREE.Shape();
+    s.moveTo(0, 0); s.lineTo(0, .9); s.lineTo(1.1, 0); s.closePath();
+    const tooth = new THREE.Mesh(new THREE.ExtrudeGeometry(s, { depth: 2.4, bevelEnabled: false }), slate);
+    tooth.position.set(-1.65 + k * 1.1, 1.8, -1.2);
+    g.add(tooth);
+  }
+  // two chimneys
+  const chimneyTops = [[-1.0, -.6], [1.0, -.6]];
+  chimneyTops.forEach(([x, z]) => g.add(box(.4, 2.6, .4, brick, x, 3.1, z)));
+  // logs stacked at the front right
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 3 - row; col++) {
+      const log = cylinder(.22, .22, 1.6, wood, 12);
+      log.rotation.z = Math.PI / 2;
+      log.position.set(2.2 + col * .5, .22 + row * .42, 1.6);
+      g.add(log);
+    }
+  }
+  g.userData.chimneys = chimneyTops.map(([x, z]) => new THREE.Vector3(x, 4.5, z));
+  return g;
+}
+function spawnSmoke(g) {
+  g.userData.chimneys.forEach(p => {
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(.25, 10, 8), lam(0xdedede, { transparent: true, opacity: .8 }));
+    puff.position.copy(p);
+    puff.castShadow = false;
+    g.add(puff);
+    smokes.push({ mesh: puff, age: 0, group: g });
+  });
+}
+
+function buildEasel() {
+  const g = new THREE.Group();
+  const wood = lam(0x8b5a2b);
+  // painting: a small landscape drawn on a canvas
+  const paint = canvasTexture(256, (ctx, s) => {
+    const sky = ctx.createLinearGradient(0, 0, 0, s);
+    sky.addColorStop(0, '#5aa9e6'); sky.addColorStop(1, '#ffd29d');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, s, s);
+    ctx.fillStyle = '#ffcf4a'; ctx.beginPath(); ctx.arc(s * .72, s * .3, s * .12, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#3a7d44'; ctx.beginPath(); ctx.moveTo(0, s * .7); ctx.quadraticCurveTo(s * .4, s * .3, s, s * .65); ctx.lineTo(s, s); ctx.lineTo(0, s); ctx.fill();
+    ctx.fillStyle = '#2b5b33'; ctx.beginPath(); ctx.moveTo(0, s * .85); ctx.quadraticCurveTo(s * .6, s * .55, s, s * .9); ctx.lineTo(s, s); ctx.lineTo(0, s); ctx.fill();
+    for (let i = 0; i < 60; i++) {                       // brush strokes
+      ctx.strokeStyle = `rgba(255,255,255,${Math.random() * .25})`;
+      ctx.lineWidth = 1 + Math.random() * 3;
+      const x = Math.random() * s, y = Math.random() * s;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + 20, y - 10, x + 40, y + 4); ctx.stroke();
+    }
+  });
+  const canvasMats = [wood, wood, wood, wood, new THREE.MeshLambertMaterial({ map: paint }), wood];
+  const board = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.6, .14), canvasMats);
+  board.position.set(0, 2.5, 0);
+  board.rotation.x = -.12;               // leans back a little
+  board.castShadow = true;
+  g.add(board);
+  // three legs, spread at the bottom
+  const top = new THREE.Vector3(0, 3.5, 0);
+  g.add(beam(top, new THREE.Vector3(-.9, 0, .5), .14, wood));
+  g.add(beam(top, new THREE.Vector3(.9, 0, .5), .14, wood));
+  g.add(beam(top, new THREE.Vector3(0, 0, -.9), .14, wood));
+  // paint tray at the bottom of the canvas
+  g.add(box(2.2, .1, .4, wood, 0, 1.2, .25));
+  return g;
+}
+
+function buildFloppy() {
+  const g = new THREE.Group();
+  const body = lam(0x1d3f8a);
+  g.add(box(2.6, 2.6, .5, body, 0, 1.3, 0));                      // the disk itself
+  g.add(box(1.8, 1.2, .04, lam(0xf4f1ea), 0, .9, .27));           // label
+  g.add(box(1.5, 1.0, .1, lam(0xc0c6cc), 0, 2.1, .3));            // metal shutter
+  g.add(box(.42, .72, .08, lam(0x222222), .35, 2.1, .36));        // shutter hole
+  return g;
+}
+
+// Barbell: a steel bar lying on the ground, with collars and two sets of weight plates
+function buildBarbell() {
+  const g = new THREE.Group();
+  const steel = lam(0xb8bec6);
+  const plate = lam(0x2a2a2a);
+  // lay a cylinder along the X axis at (x, y, 0)
+  const alongX = (m, x, y) => { m.rotation.z = Math.PI / 2; m.position.set(x, y, 0); return m; };
+  g.add(alongX(cylinder(.08, .08, 4.4, steel, 12), 0, .6));                                // bar
+  [-1, 1].forEach(s => {
+    g.add(alongX(cylinder(.6, .6, .3, plate, 24), s * 1.7, .6));                           // big plate
+    g.add(alongX(cylinder(.42, .42, .26, plate, 24), s * 1.95, .6));                       // small plate
+    g.add(alongX(cylinder(.14, .14, .12, steel, 12), s * 2.15, .6));                       // collar
+  });
+  return g;
+}
+
+// Stockholm skyline, simplified and not to scale:
+// City Hall with its tower and gold crown, the Globe arena, the Kaknäs tower, and the Riddarholmen spire
+function buildSkyline() {
+  const g = new THREE.Group();
+  const brick = lam(0xb5523b);
+  const gold = lam(0xd4a017);
+  const concrete = lam(0xbfc5cc);
+  const stone = lam(0xb8b0a0);
+  const copper = lam(0x3a6b4f);
+  // City Hall: brick block, tower, and the three gold crowns on top
+  g.add(box(2.6, 1.4, 1.6, brick, -1.2, .7, 0));
+  g.add(box(.9, 2.6, .9, brick, -1.2, 2.7, 0));
+  g.add(cylinder(0, .45, .9, gold, 4).translateX(-1.2).translateY(4.45));
+  // the Globe: a big sphere on three legs
+  const globeC = new THREE.Vector3(1.6, 2.3, -.6);
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(1.0, 24, 16), concrete).translateX(globeC.x).translateY(globeC.y).translateZ(globeC.z));
+  for (let i = 0; i < 3; i++) {
+    const a = i * Math.PI * 2 / 3;
+    g.add(beam(new THREE.Vector3(globeC.x + .8 * Math.cos(a), 0, globeC.z + .8 * Math.sin(a)), new THREE.Vector3(globeC.x, 1.3, globeC.z), .12, concrete));
+  }
+  // Kaknäs tower: a thin concrete shaft with a viewing pod near the top
+  g.add(cylinder(.2, .28, 4.4, concrete).translateX(-2.9).translateY(2.2).translateZ(-1.2));
+  g.add(cylinder(.65, .55, .6, stone, 16).translateX(-2.9).translateY(3.9).translateZ(-1.2));
+  // Riddarholmen church: a stone body and a green spire
+  g.add(box(1.0, 1.0, .9, stone, .4, .5, -1.8));
+  g.add(cylinder(0, .4, 1.8, copper, 8).translateX(.4).translateY(1.9).translateZ(-1.8));
+  g.scale.setScalar(.7);   // a little lower, so the skyline sits in proportion with the island
+  return g;
+}
+
+// An old Macintosh: a beige case, a screen showing the welcome box, a floppy slot, a keyboard, and a mouse
+function buildMac() {
+  const g = new THREE.Group();
+  const beige = lam(0xe6dcc0);
+  const darkBeige = lam(0xc9bd9c);
+  const screenTex = canvasTexture(256, (ctx, s) => {
+    ctx.fillStyle = '#b9c4cc'; ctx.fillRect(0, 0, s, s);                      // the glass
+    ctx.fillStyle = '#fff'; ctx.fillRect(22, 92, s - 44, 72);                 // the welcome box
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 4; ctx.strokeRect(22, 92, s - 44, 72);
+    ctx.fillStyle = '#000'; ctx.font = 'bold 20px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('Welcome to Macintosh', s / 2, 128);
+  });
+  const screenMats = [beige, beige, beige, beige, new THREE.MeshLambertMaterial({ map: screenTex }), beige];
+  g.add(box(2.2, 2.1, 2.0, beige, 0, 1.05, 0));                                       // case
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.3, .06), screenMats).translateY(1.5).translateZ(1.03)); // screen
+  g.add(box(.9, .07, .06, lam(0x222222), .2, .55, 1.03));                             // floppy slot
+  g.add(box(2.4, .25, .8, darkBeige, 0, .13, 1.9));                                   // keyboard
+  g.add(box(.35, .12, .5, darkBeige, 1.8, .07, 2.1));                                 // mouse
+  return g;
+}
+
+// The object rests on the highest ground under its footprint, so no part sinks into a slope
+function groundUnder(x, z, r = 2.4, pick = Math.max) {
+  let h = pick === Math.max ? -Infinity : Infinity;
+  for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) h = pick(h, heightAt(x + i * r / 2, z + j * r / 2));
+  return h;
+}
+const BUILDERS = [buildFactory, buildEasel, buildFloppy, buildBarbell, buildSkyline, buildMac];
+const towers = [];
+CHAPTERS.forEach((c, i) => {
+  const [x, z] = positions[i];
+  const g = BUILDERS[i]();
+  // the skyline and the Macintosh are wider than the other objects: seat them on the ground at their centers
+  g.position.set(x, i === 4 || i === 5 ? heightAt(x, z) : groundUnder(x, z), z);
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  scene.add(g);
+  towers.push({ idx: i, x, z, group: g, meshes: [] });
+  g.traverse(o => { if (o.isMesh) towers[towers.length - 1].meshes.push(o); });
+});
+
+// ---- pine trees around the factory -----------------------------------------
+// Each pine: a brown trunk and two stacked green cones, in a loose ring with some variation
+function buildPine(scale) {
+  const t = new THREE.Group();
+  t.add(cylinder(.12, .16, .9, lam(0x6b4a33), 8).translateY(.45));
+  t.add(cylinder(0, .8, 1.4, lam(0x2f6b3a), 10).translateY(1.5));
+  t.add(cylinder(0, .6, 1.1, lam(0x3a7d44), 10).translateY(2.4));
+  t.scale.setScalar(scale);
+  return t;
+}
+const [FX, FZ] = positions[0];
+for (let i = 0; i < 9; i++) {
+  const jitter = amount => (Math.random() * 2 - 1) * amount;
+  const a = i * Math.PI * 2 / 9 + jitter(.2);
+  const r = 5.5 + (i % 2) * 1.2 + jitter(.4);
+  const x = FX + Math.cos(a) * r, z = FZ + Math.sin(a) * r;
+  const tree = buildPine(.9 + (i % 3) * .15);
+  tree.position.set(x, heightAt(x, z), z);
+  tree.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  scene.add(tree);
+}
+
+// ---- coins: one per destination, collected by visiting it -----------------
+// Each coin floats above its destination. Walking up to a destination, or opening it, collects the coin.
+let coinsCollected = 0;
+// polished gold: a metallic finish with a bright emissive core, so it reads as shiny without an environment map
+const coinMat = new THREE.MeshStandardMaterial({ color: 0xffc93c, metalness: .7, roughness: .25, emissive: 0x9a6100, emissiveIntensity: .6 });
+const coinGeo = new THREE.CylinderGeometry(.35, .35, .08, 20);
+const coins = positions.map(([x, z], i) => {
+  const spin = new THREE.Group();          // spins around the vertical axis
+  const disc = new THREE.Mesh(coinGeo, coinMat);
+  disc.rotation.x = Math.PI / 2;           // stands the coin upright
+  spin.add(disc);
+  spin.position.set(x, groundUnder(x, z) + 5.2, z);
+  scene.add(spin);
+  return { group: spin, idx: i, baseY: spin.position.y, taken: false, x, z };
+});
+// Reward effects: sparks, a ground shockwave, and the collected coin's swell. All run in the loop.
+const effects = [];
+const sparkGeo = new THREE.OctahedronGeometry(.12);
+function burst(c) {
+  const center = c.group.position.clone();
+  for (let i = 0; i < 18; i++) {
+    const m = new THREE.Mesh(sparkGeo, new THREE.MeshBasicMaterial({ color: 0xffe08a, transparent: true, opacity: 1 }));
+    m.position.copy(center);
+    scene.add(m);
+    const a = Math.random() * Math.PI * 2, s = 3 + Math.random() * 4;
+    effects.push({ kind: 'spark', mesh: m, vel: new THREE.Vector3(Math.cos(a) * s, 4 + Math.random() * 4, Math.sin(a) * s), age: 0, life: .9 });
+  }
+  const ring = new THREE.Mesh(new THREE.RingGeometry(.4, .55, 40), new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: .9, side: THREE.DoubleSide }));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(c.x, groundUnder(c.x, c.z) + .05, c.z);
+  scene.add(ring);
+  effects.push({ kind: 'ring', mesh: ring, age: 0, life: .6 });
+}
+let shakeAmt = 0;
+function updateCoinHud() {
+  const hud = document.getElementById('hud-left');
+  hud.textContent = `COINS ${coinsCollected}/${CHAPTERS.length}`;
+  hud.classList.remove('bump'); void hud.offsetWidth; hud.classList.add('bump');   // restart the bump
+}
+let toastTimer = 0;
+function showToast(text) {
+  const t = document.getElementById('toast');
+  t.textContent = text;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 1400);
+}
+function collectCoin(i) {
+  const c = coins[i];
+  if (!c || c.taken) return;
+  c.taken = true;
+  effects.push({ kind: 'coin', group: c.group, age: 0, life: .6 });
+  burst(c);
+  shakeAmt = .25;
+  coinsCollected += 1;
+  updateCoinHud();
+  showToast(coinsCollected === CHAPTERS.length ? 'ALL COINS COLLECTED!' : `+1 COIN · ${coinsCollected}/${CHAPTERS.length}`);
+}
+
+// ---- the player: a voxel figure made of boxes ----------------------------
+const player = new THREE.Group();
+const skin = lam(0xffd9b3);
+const shirt = lam(0xef476f);
+const pants = lam(0x1b263b);
+function part(w, h, d, material, x, y, z) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+  m.position.set(x, y, z); m.castShadow = true; player.add(m); return m;
+}
+part(.8, .8, .8, skin, 0, 1.6, 0);
+part(.9, .9, .5, shirt, 0, .85, 0);
+const legL = part(.35, .7, .4, pants, -.22, .25, 0);
+const legR = part(.35, .7, .4, pants, .22, .25, 0);
+scene.add(player);
+player.position.set(0, heightAt(0, 0), 0);
+
+// ---- tokens for the mini-game -------------------------------------------
+const tokenGeo = new THREE.OctahedronGeometry(.4);
+const tokenMat = lam(0xffd166, { emissive: 0xffaa00, emissiveIntensity: .4 });
+const tokens = [];
+function spawnTokens(n = 14) {
+  tokens.forEach(t => scene.remove(t.mesh));
+  tokens.length = 0;
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, r = 4 + Math.random() * 14;
+    const x = Math.cos(a) * r, z = Math.sin(a) * r;
+    const m = new THREE.Mesh(tokenGeo, tokenMat);
+    m.position.set(x, heightAt(x, z) + 1.2, z);
+    m.castShadow = true;
+    scene.add(m);
+    tokens.push({ mesh: m, baseY: m.position.y, taken: false });
+  }
+}
+
+// ---- state ---------------------------------------------------------------
+const state = { started: false, visited: new Set(), tokens: 0, timeLeft: 60, running: false, dir: new THREE.Vector3(), velY: 0, onGround: true, panelOpen: false };
+const keys = {};
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'KeyE') interact();
+  if (e.code === 'KeyT') startTokenRun();
+  if (e.code === 'Space' && state.onGround && state.started) { state.velY = 8; state.onGround = false; }
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+
+// ---- click an object to open it -------------------------------------------
+const ray = new THREE.Raycaster();
+canvas.addEventListener('click', e => {
+  if (!state.started) return;
+  const ndc = new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects(towers.flatMap(t => t.meshes), false)[0];
+  if (hit) {
+    const t = towers.find(tw => tw.meshes.includes(hit.object));
+    if (t) openChapter(t.idx);
+  }
+});
+
+// ---- chapter panel --------------------------------------------------------
+const panel = document.getElementById('panel');
+function openChapter(i) {
+  const c = CHAPTERS[i];
+  document.getElementById('panel-title').textContent = `${c.title} ${c.year}`.trim();
+  document.getElementById('panel-body').textContent = c.body;
+  document.getElementById('panel-art').textContent = c.art;
+  panel.classList.add('open'); state.panelOpen = true;
+  state.visited.add(i);
+  collectCoin(i);
+}
+document.getElementById('panel-close').addEventListener('click', () => { panel.classList.remove('open'); state.panelOpen = false; });
+
+// ---- walk + interact -----------------------------------------------------
+function nearestTower() {
+  let best = null, bd = Infinity;
+  towers.forEach(t => { const d = Math.hypot(player.position.x - t.x, player.position.z - t.z); if (d < bd) { bd = d; best = t; } });
+  return bd < 4.2 ? best : null;
+}
+function interact() {
+  if (!state.started || state.panelOpen) return;
+  const t = nearestTower();
+  if (t) openChapter(t.idx);
+}
+
+// ---- token run mini-game -------------------------------------------------
+const gameOver = document.getElementById('game-over');
+function startTokenRun() {
+  if (state.running || !state.started) return;
+  state.running = true; state.tokens = 0; state.timeLeft = 60;
+  spawnTokens(14); updateHud();
+  const t = setInterval(() => {
+    state.timeLeft -= 1; updateHud();
+    if (state.timeLeft <= 0) {
+      clearInterval(t); state.running = false;
+      tokens.forEach(k => scene.remove(k.mesh)); tokens.length = 0;
+      let best = 0; try { best = Number(localStorage.getItem('best-objects') || 0); } catch (e) {}
+      if (state.tokens > best) { try { localStorage.setItem('best-objects', state.tokens); } catch (e) {} best = state.tokens; }
+      document.getElementById('go-text').innerHTML = `TIME UP<br>${state.tokens} TOKENS · BEST ${best}`;
+      gameOver.classList.add('show');
+    }
+  }, 1000);
+}
+document.getElementById('again').addEventListener('click', () => { gameOver.classList.remove('show'); startTokenRun(); });
+function updateHud() {
+  document.getElementById('hud-right').textContent = `TOKENS ${String(state.tokens).padStart(2, '0')} · TIME ${state.timeLeft}`;
+}
+
+// ---- intro ---------------------------------------------------------------
+document.getElementById('start-btn').addEventListener('click', () => {
+  state.started = true;
+  document.getElementById('intro').classList.add('gone');
+  document.getElementById('start-btn').blur();
+});
+
+// ---- loop ----------------------------------------------------------------
+// Option 3: a retro dialog that types out the story when you walk up to the skyline
+let typeTimer = 0;
+let dialogFor = -1;
+function typeInto(el, text, speed = 24) {
+  clearInterval(typeTimer);
+  el.textContent = '';
+  let i = 0;
+  typeTimer = setInterval(() => {
+    el.textContent += text[i++];
+    if (i >= text.length) clearInterval(typeTimer);
+  }, speed);
+}
+function showDialog(i) {
+  const c = CHAPTERS[i];
+  document.getElementById('dialog-title').textContent = c.title;
+  typeInto(document.getElementById('dialog-text'), c.body);
+  document.getElementById('dialog').classList.add('show');
+  dialogFor = i;
+}
+function hideDialog() {
+  document.getElementById('dialog').classList.remove('show');
+  clearInterval(typeTimer);
+  dialogFor = -1;
+}
+const clock = new THREE.Clock();
+const target = new THREE.Vector3();
+const camDir = new THREE.Vector3();
+const right = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0);
+function tick() {
+  const dt = Math.min(clock.getDelta(), .05);
+  const time = clock.elapsedTime;
+
+  // walk relative to the camera
+  const fwd = (keys.KeyW || keys.ArrowUp ? 1 : 0) - (keys.KeyS || keys.ArrowDown ? 1 : 0);
+  const side = (keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0);
+  const moving = (fwd || side) && state.started && !state.panelOpen;
+  if (moving) {
+    camera.getWorldDirection(camDir); camDir.y = 0; camDir.normalize();
+    right.crossVectors(camDir, UP);
+    state.dir.set(0, 0, 0).addScaledVector(camDir, fwd).addScaledVector(right, side);
+    if (state.dir.lengthSq() > 0) {
+      state.dir.normalize();
+      player.position.addScaledVector(state.dir, 6 * dt);
+      player.rotation.y = Math.atan2(state.dir.x, state.dir.z);
+    }
+  }
+  // stay on the island
+  const r = Math.hypot(player.position.x, player.position.z);
+  if (r > ISLAND_R - 2) { const k = (ISLAND_R - 2) / r; player.position.x *= k; player.position.z *= k; }
+
+  // gravity and landing
+  const groundH = heightAt(player.position.x, player.position.z);
+  state.velY -= 30 * dt;
+  player.position.y += state.velY * dt;
+  if (player.position.y <= groundH) { player.position.y = groundH; state.velY = 0; state.onGround = true; }
+  else state.onGround = false;
+
+  // walk animation
+  const stride = moving ? Math.sin(time * 12) * .5 : 0;
+  legL.rotation.x = stride; legR.rotation.x = -stride;
+
+  // factory smoke: puffs rise, widen, and fade out
+  smokeTimer += dt;
+  if (smokeTimer > .7) { smokeTimer = 0; spawnSmoke(towers[0].group); }
+  for (let i = smokes.length - 1; i >= 0; i--) {
+    const s = smokes[i];
+    s.age += dt;
+    s.mesh.position.y += dt * .9;
+    s.mesh.scale.multiplyScalar(1 + dt * .35);
+    s.mesh.material.opacity = Math.max(0, .8 * (1 - s.age / 3.5));
+    if (s.age > 3.5) { s.group.remove(s.mesh); smokes.splice(i, 1); }
+  }
+
+  // camera follows with easing
+  target.set(player.position.x, player.position.y + 3, player.position.z);
+  const desired = new THREE.Vector3(target.x - 9, target.y + 8, target.z + 12);
+  camera.position.lerp(desired, 1 - Math.pow(0.001, dt));
+  camera.lookAt(target);
+  // a short camera shake that dies away after each coin
+  if (shakeAmt > 0) {
+    camera.position.x += (Math.random() - .5) * shakeAmt;
+    camera.position.y += (Math.random() - .5) * shakeAmt;
+    shakeAmt *= Math.pow(.02, dt);
+  }
+
+  // prompt when close to an object
+  const near = nearestTower();
+  document.getElementById('prompt').classList.toggle('show', !!near && state.started && !state.panelOpen);
+
+  // each destination's story types out when the player arrives, and closes when they walk away
+  const arrived = positions.findIndex(([x, z]) => Math.hypot(player.position.x - x, player.position.z - z) < 3.5);
+  if (arrived !== -1 && arrived !== dialogFor && !state.panelOpen) showDialog(arrived);
+  else if (dialogFor !== -1 && Math.hypot(player.position.x - positions[dialogFor][0], player.position.z - positions[dialogFor][1]) > 5) hideDialog();
+
+  // coins: spin, bob, and collect when the player reaches their destination
+  coins.forEach(c => {
+    if (c.taken) return;
+    c.group.rotation.y += dt * 3;
+    c.group.position.y = c.baseY + Math.sin(time * 2 + c.idx) * .25;
+    if (Math.hypot(player.position.x - c.x, player.position.z - c.z) < 3) collectCoin(c.idx);
+  });
+  for (let i = effects.length - 1; i >= 0; i--) {
+    const e = effects[i];
+    e.age += dt;
+    const k = Math.min(1, e.age / e.life);
+    if (e.kind === 'spark') {
+      e.vel.y -= 14 * dt;                                   // sparks fall back down
+      e.mesh.position.addScaledVector(e.vel, dt);
+      e.mesh.rotation.x += dt * 10;
+      e.mesh.material.opacity = 1 - k;
+    } else if (e.kind === 'ring') {
+      e.mesh.scale.setScalar(1 + k * 9);                    // shockwave spreads across the ground
+      e.mesh.material.opacity = .9 * (1 - k);
+    } else {                                                // the coin: swells, spins fast, then vanishes
+      e.group.rotation.y += dt * 25;
+      e.group.scale.setScalar(k < .3 ? 1 + (k / .3) * .6 : 1.6 * (1 - (k - .3) / .7));
+      e.group.position.y += dt * 2.5;
+    }
+    if (k >= 1) {
+      if (e.kind === 'coin') scene.remove(e.group);
+      else { scene.remove(e.mesh); e.mesh.material.dispose(); }
+      effects.splice(i, 1);
+    }
+  }
+
+  // tokens: spin, bob, collect
+  if (state.running) {
+    tokens.forEach(k => {
+      if (k.taken) return;
+      k.mesh.rotation.y += dt * 3;
+      k.mesh.position.y = k.baseY + Math.sin(time * 3 + k.baseY) * .25;
+      if (k.mesh.position.distanceTo(player.position.clone().add(new THREE.Vector3(0, 1, 0))) < 1.2) {
+        k.taken = true; scene.remove(k.mesh); state.tokens += 1; updateHud();
+      }
+    });
+    if (tokens.filter(k => !k.taken).length < 8) spawnTokens(14);
+  }
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+tick();
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
