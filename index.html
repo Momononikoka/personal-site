@@ -350,15 +350,16 @@ function buildMac() {
   const darkBeige = lam(0xc9bd9c);
   const screenTex = canvasTexture(256, (ctx, s) => {
     ctx.fillStyle = '#b9c4cc'; ctx.fillRect(0, 0, s, s);                      // the glass
-    ctx.fillStyle = '#fff'; ctx.fillRect(22, 92, s - 44, 72);                 // the welcome box
-    ctx.strokeStyle = '#000'; ctx.lineWidth = 4; ctx.strokeRect(22, 92, s - 44, 72);
-    ctx.fillStyle = '#000'; ctx.font = 'bold 20px monospace';
+    ctx.fillStyle = '#fff'; ctx.fillRect(22, 60, s - 44, 136);                // the welcome box
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 4; ctx.strokeRect(22, 60, s - 44, 136);
+    ctx.fillStyle = '#000'; ctx.font = 'bold 22px monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('Welcome to Macintosh', s / 2, 128);
+    ctx.fillText('Welcome to', s / 2, 110);
+    ctx.fillText('Macintosh', s / 2, 148);
   });
   const screenMats = [beige, beige, beige, beige, new THREE.MeshLambertMaterial({ map: screenTex }), beige];
   g.add(box(2.2, 2.1, 2.0, beige, 0, 1.05, 0));                                       // case
-  g.add(new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.3, .06), screenMats).translateY(1.5).translateZ(1.03)); // screen
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.1, .06), screenMats).translateY(1.45).translateZ(1.03)); // screen
   g.add(box(.9, .07, .06, lam(0x222222), .2, .55, 1.03));                             // floppy slot
   g.add(box(2.4, .25, .8, darkBeige, 0, .13, 1.9));                                   // keyboard
   g.add(box(.35, .12, .5, darkBeige, 1.8, .07, 2.1));                                 // mouse
